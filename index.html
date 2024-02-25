@@ -2,30 +2,176 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Mapa de Vista Satelital - AstraMap</title>
+  <title>Mapa de Vista Satelital - Lugares Seguros en Villavicencio</title>
   <style>
     #map {
-      height: 400px;
+      height: 600px;
       width: 100%;
+    }
+    .sidebar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1;
+      background: #fff;
+      padding: 10px;
+      border-radius: 3px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.10);
     }
   </style>
 </head>
 <body>
-  <h1>Mapa de Vista Satelital - AstraMap</h1>
+  <div class="sidebar">
+    <h2>Buscar ruta:</h2>
+    <label for="start">Desde:</label>
+    <select id="start">
+      <option value="mi-ubicacion">Mi ubicación</option>
+      <option value="otra-ubicacion">Otra ubicación</option>
+      <!-- Agrega más opciones según sea necesario -->
+    </select>
+    <input type="text" id="start-address" placeholder="Ingrese su ubicación" style="display: none;">
+    <br>
+    <label for="end">Hasta:</label>
+    <select id="end">
+      <option value="">Seleccione un lugar seguro</option>
+      <option value="parque-los-fundadores">Parque Los Fundadores</option>
+      <option value="bioparque-los-ocarros">Bioparque Los Ocarros</option>
+      <option value="centro-comercial-viva-villavicencio">Centro Comercial Viva Villavicencio</option>
+      <!-- Agrega más opciones según sea necesario -->
+    </select>
+    <br>
+    <button onclick="findRoute()">Buscar Ruta</button>
+  </div>
   <div id="map"></div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.5.1/mapbox-gl.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.5.1/mapbox-gl.css" rel="stylesheet">
 
   <script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoibWl0bmlja3NlY3VyaXR5IiwiYSI6ImNsaTB5OTY3aDA0ZHMzanJyeXo5ODVpMHIifQ.JpyEq6y4PxrxATb0cOiZew'; // Reemplaza 'TU_TOKEN_DE_ACCESO' con tu token de acceso de Mapbox
+    mapboxgl.accessToken = 'pk.eyJ1IjoibWl0bmlja3NlY3VyaXR5IiwiYSI6ImNsaTB5OTY3aDA0ZHMzanJyeXo5ODVpMHIifQ.JpyEq6y4PxrxATb0cOiZew';
 
     var map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/satellite-streets-v11',
-      center: [-74.0060, 40.7128], // Coordenadas del centro del mapa
-      zoom: 15
+      center: [-73.7567196, 4.1249151], // Coordenadas de Villavicencio
+      zoom: 13
     });
+
+    // Coordenadas y nombres de los lugares más seguros en Villavicencio
+    var safePlaces = {
+      'parque-los-fundadores': { name: "Parque Los Fundadores", coordinates: [-73.6360, 4.1357] },
+      'bioparque-los-ocarros': { name: "Bioparque Los Ocarros", coordinates: [-73.6349, 4.1408] },
+      'centro-comercial-viva-villavicencio': { name: "Centro Comercial Viva Villavicencio", coordinates: [-73.6425, 4.1216] }
+      // Agrega más lugares según sea necesario
+    };
+
+    // Función para buscar y mostrar la ruta en el mapa
+    function findRoute() {
+      var startOption = document.getElementById('start').value;
+      var start;
+      if (startOption === 'mi-ubicacion') {
+        // Obtener las coordenadas de la ubicación actual del usuario
+        navigator.geolocation.getCurrentPosition(function(position) {
+          start = [position.coords.longitude, position.coords.latitude];
+          var end = document.getElementById('end').value;
+          calculateRoute(start, end);
+        });
+      } else {
+        // Obtener las coordenadas a partir de la dirección ingresada
+        var startAddress = document.getElementById('start-address').value;
+        var geocodingUrl = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + encodeURIComponent(startAddress) + '.json?access_token=' + mapboxgl.accessToken;
+        fetch(geocodingUrl)
+          .then(function(response) {
+            return response.json();
+          })
+          .then(function(data) {
+            var features = data.features;
+            if (features.length > 0) {
+              start = features[0].center;
+              var end = document.getElementById('end').value;
+              calculateRoute(start, end);
+            } else {
+              alert('No se encontraron resultados para la ubicación ingresada.');
+            }
+          })
+          .catch(function(error) {
+            console.error('Error al obtener las coordenadas:', error);
+            alert('Se produjo un error al obtener las coordenadas.');
+          });
+      }
+    }
+
+    // Función para calcular y mostrar la ruta desde el punto de inicio hasta el punto de destino
+    function calculateRoute(start, end) {
+      var startPoint;
+      if (Array.isArray(start)) {
+        // Si el punto de inicio es un array de coordenadas
+        startPoint = start.join(',');
+      } else {
+        // Si el punto de inicio es la posición del usuario
+        startPoint = start.coords.longitude + ',' + start.coords.latitude;
+      }
+      
+      var endPoint = safePlaces[end].coordinates.join(',');
+
+      // Calcular la ruta desde el punto de inicio hasta el punto de destino
+      var routeUrl = 'https://api.mapbox.com/directions/v5/mapbox/driving/' + startPoint + ';' + endPoint + '?access_token=' + mapboxgl.accessToken;
+
+      fetch(routeUrl)
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(data) {
+          var route = data.routes[0];
+          var routeCoordinates = route.geometry.coordinates;
+          
+          // Mostrar la ruta en el mapa
+          if (routeCoordinates) {
+            map.addLayer({
+              id: 'route',
+              type: 'line',
+              source: {
+                type: 'geojson',
+                data: {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: routeCoordinates
+                  }
+                }
+              },
+              layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              paint: {
+                'line-color': '#3887be',
+                'line-width': 5
+              }
+            });
+
+            // Ajustar la vista del mapa para mostrar la ruta
+            var bounds = routeCoordinates.reduce(function(bounds, coord) {
+              return bounds.extend(coord);
+            }, new mapboxgl.LngLatBounds(routeCoordinates[0], routeCoordinates[0]));
+
+            map.fitBounds(bounds, {
+              padding: { top: 50, bottom: 50, left: 50, right: 50 }
+            });
+
+            // Mostrar mensaje de éxito con la información de la ruta
+            alert('Ruta mostrada en el mapa.');
+          } else {
+            console.error('No se recibieron coordenadas de ruta válidas.');
+            alert('No se recibieron coordenadas de ruta válidas.');
+          }
+        })
+        .catch(function(error) {
+          console.error('Error al calcular la ruta:', error);
+          alert('Se produjo un error al calcular la ruta.');
+        });
+    }
   </script>
 </body>
 </html>
